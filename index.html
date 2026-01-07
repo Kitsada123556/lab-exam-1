@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Tracker Ultra</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        h1 { margin-bottom: 5px; }
+        .controls { margin: 10px 0; }
+        select, button { padding: 8px 12px; font-size: 1rem; margin: 5px; cursor: pointer; }
+        #time { font-size: .9rem; color: #555; }
+        .card-container { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin: 20px 0; }
+        .card { background: #fff; padding: 15px 20px; border-radius: 10px; width: 180px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+        .price { font-size: 1.4rem; font-weight: bold; margin-top: 8px; }
+        canvas {
+            width: 100%;
+            max-width: 950px;
+            height: 420px !important;
+            margin: auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<h1>Cryptocurrency Tracker Ultra</h1>
+
+<div class="controls">
+    <label>เลือกสกุลเงิน: </label>
+    <select id="currency" onchange="updatePrices()">
+        <option value="usd">USD</option>
+        <option value="eur">EUR</option>
+        <option value="thb">THB</option>
+        <option value="jpy">JPY</option>
+        <option value="gbp">GBP</option>
+    </select>
+    <button onclick="updatePrices()">อัปเดตราคา</button>
+</div>
+
+<p id="time">อัปเดตล่าสุด: -</p>
+
+<div id="coins" class="card-container"></div>
+
+<h2>กราฟย้อนหลัง 30 วัน BTC vs ETH</h2>
+<div style="height:420px">
+    <canvas id="chart"></canvas>
+</div>
+
+<script>
+    const list = ["bitcoin", "ethereum", "binancecoin", "dogecoin", "solana"];
+    let chartObj = null;
+
+    async function updatePrices() {
+        const vs = document.getElementById("currency").value;
+        try {
+            const api = `https://api.coingecko.com/api/v3/simple/price?ids=${list.join(",")}&vs_currencies=${vs}`;
+            const r = await fetch(api);
+            const d = await r.json();
+
+            let html = "";
+            list.forEach(c => {
+                const price = d[c][vs];
+                html += `
+                <div class="card">
+                    <h3>${c.toUpperCase()}</h3>
+                    <div class="price">${formatCurrency(price, vs)}</div>
+                </div>
+            `;
+            });
+
+            document.getElementById("coins").innerHTML = html;
+            document.getElementById("time").textContent =
+                "อัปเดตล่าสุด: " + new Date().toLocaleTimeString();
+        } catch {
+            document.getElementById("coins").innerHTML = "<p>Error loading</p>";
+        }
+    }
+
+    function formatCurrency(n, vs) {
+        const map = { usd: "$", eur: "€", thb: "฿", jpy: "¥", gbp: "£" };
+        return `${map[vs]} ${Number(n).toLocaleString()}`;
+    }
+
+    async function drawChart() {
+        const fetchHistory = async (id) => {
+            const r = await fetch(
+                `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=30`
+            );
+            const d = await r.json();
+            return d.prices.map(p => ({
+                time: new Date(p[0]).toLocaleDateString(),
+                price: p[1]
+            }));
+        };
+
+        const btc = await fetchHistory("bitcoin");
+        const eth = await fetchHistory("ethereum");
+        const labels = btc.map(x => x.time);
+
+        if (chartObj) chartObj.destroy();
+
+        chartObj = new Chart(document.getElementById("chart"), {
+            type: "line",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "BTC (30 วัน)",
+                        data: btc.map(x => x.price),
+                        borderColor: "rgba(0,120,255,1)",
+                        backgroundColor: "rgba(0,120,255,0.15)",
+                        borderWidth: 3,
+                        pointRadius: 2,
+                        tension: 0.3
+                    },
+                    {
+                        label: "ETH (30 วัน)",
+                        data: eth.map(x => x.price),
+                        borderColor: "rgba(255,80,120,1)",
+                        backgroundColor: "rgba(255,80,120,0.15)",
+                        borderWidth: 3,
+                        pointRadius: 2,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: "top", labels: { font: { size: 14 } } }
+                },
+                scales: {
+                    x: { grid: { color: "rgba(230,230,230,0.3)" } },
+                    y: {
+                        ticks: {
+                            callback: v => "$ " + v.toLocaleString()
+                        },
+                        grid: { color: "rgba(200,200,200,0.3)" }
+                    }
+                }
+            }
+        });
+    }
+
+    updatePrices();
+    drawChart();
+    setInterval(updatePrices, 60000);
+</script>
+
+</body>
+</html>
